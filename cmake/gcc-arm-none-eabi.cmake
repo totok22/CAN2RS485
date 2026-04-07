@@ -6,7 +6,20 @@ set(CMAKE_CXX_COMPILER_ID GNU)
 
 # Some default GCC settings
 # arm-none-eabi- must be part of path environment
-set(TOOLCHAIN_PREFIX                arm-none-eabi-)
+set(ARM_GNU_TOOLCHAIN_BIN "" CACHE PATH "Path to Arm GNU Toolchain bin directory")
+
+# Prefer the official Arm GNU Toolchain on macOS when available.
+if(NOT ARM_GNU_TOOLCHAIN_BIN)
+	if(EXISTS "/Applications/ArmGNUToolchain/15.2.rel1/arm-none-eabi/bin/arm-none-eabi-gcc")
+		set(ARM_GNU_TOOLCHAIN_BIN "/Applications/ArmGNUToolchain/15.2.rel1/arm-none-eabi/bin")
+	endif()
+endif()
+
+if(ARM_GNU_TOOLCHAIN_BIN)
+	set(TOOLCHAIN_PREFIX            ${ARM_GNU_TOOLCHAIN_BIN}/arm-none-eabi-)
+else()
+	set(TOOLCHAIN_PREFIX            arm-none-eabi-)
+endif()
 
 set(CMAKE_C_COMPILER                ${TOOLCHAIN_PREFIX}gcc)
 set(CMAKE_ASM_COMPILER              ${CMAKE_C_COMPILER})
