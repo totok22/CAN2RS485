@@ -48,6 +48,7 @@ TOPIC_TELEMETRY = "fsae/telemetry"
 
 ```bash
 python local_sim2.py
+./.venv/bin/python REFERENCE/protobuf-master/local_sim2.py --mode mqtt
 ```
 
 如果要测试 USB 转 485 + DTU：
