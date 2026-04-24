@@ -42,15 +42,16 @@
 
 #define APP_LED_FAST_BLINK_MS           100U
 #define APP_LED_SLOW_BLINK_MS           500U
-#define APP_LED_LINK_HOLD_MS            500U
 #define APP_BASE_TELEMETRY_PERIOD_MS    100U
 #define APP_MODULE_TELEMETRY_PERIOD_MS  500U
 #define APP_SNAPSHOT_TIMEOUT_MS         2000U
 #define APP_RS485_TX_TIMEOUT_MS         200U
+#define APP_DEBUG_CLI_ENABLE            0U
 #define APP_DEBUG_UART_TIMEOUT_MS       50U
 #define APP_DEBUG_CAN_TRACE_DEPTH       8U
 #define APP_DEBUG_DUMP_COUNT            3U
 #define APP_DEBUG_CLI_BUFFER_SIZE       32U
+#define APP_CAN_RX_MAX_FRAMES_PER_IRQ   8U
 
 #define APP_LED_ON_STATE                GPIO_PIN_RESET
 #define APP_LED_OFF_STATE               GPIO_PIN_SET
@@ -185,26 +186,28 @@ static void App_SetStatusLed(uint8_t on);
 static void App_UpdateStatusLed(uint32_t now);
 static void App_DebugRecordCanRx(CAN_HandleTypeDef *hcan, const CAN_RxHeaderTypeDef *header, const uint8_t *data);
 static void App_DebugPollCli(void);
+#if APP_DEBUG_CLI_ENABLE
 static void App_DebugDumpRecentCan(const char *command);
+#endif
 static HAL_StatusTypeDef App_CAN_ConfigFilter(CAN_HandleTypeDef *hcan, uint32_t filter_bank);
 static void App_ProcessCanRx(CAN_HandleTypeDef *hcan, const CAN_RxHeaderTypeDef *header, const uint8_t *data);
 static void App_ProcessCan1Rx(const CAN_RxHeaderTypeDef *header, const uint8_t *data);
 static void App_ProcessCan2Rx(const CAN_RxHeaderTypeDef *header, const uint8_t *data);
-static void App_ProcessCan1Ext(uint32_t ext_id, const uint8_t *data, uint8_t dlc);
-static void App_ProcessCan2Ext(uint32_t ext_id, const uint8_t *data, uint8_t dlc);
-static void App_ProcessCan2Std(uint32_t std_id, const uint8_t *data, uint8_t dlc);
-static void App_ProcessVoltageFrame(uint32_t ext_id, const uint8_t *data, uint8_t dlc, uint32_t now);
-static void App_ProcessTempFrame(uint32_t ext_id, const uint8_t *data, uint8_t dlc, uint32_t now);
-static void App_ProcessPackSummary(const uint8_t *data, uint8_t dlc, uint32_t now);
-static void App_ProcessCellVoltageSum(const uint8_t *data, uint8_t dlc, uint32_t now);
-static void App_ProcessImdDiag(const uint8_t *data, uint8_t dlc, uint32_t now);
-static void App_ProcessCellExtrema(const uint8_t *data, uint8_t dlc, uint32_t now);
-static void App_ProcessTempExtrema(const uint8_t *data, uint8_t dlc, uint32_t now);
-static void App_ProcessStatusFrame(const uint8_t *data, uint8_t dlc, uint32_t now);
-static void App_ProcessAlarmFrame(const uint8_t *data, uint8_t dlc, uint32_t now);
-static void App_ProcessChargerFeedback(const uint8_t *data, uint8_t dlc, uint32_t now);
-static void App_ProcessCan2PowerStatus(const uint8_t *data, uint8_t dlc, uint32_t now);
-static void App_ProcessCan2DiagStatus(const uint8_t *data, uint8_t dlc, uint32_t now);
+static uint8_t App_ProcessCan1Ext(uint32_t ext_id, const uint8_t *data, uint8_t dlc);
+static uint8_t App_ProcessCan2Ext(uint32_t ext_id, const uint8_t *data, uint8_t dlc);
+static uint8_t App_ProcessCan2Std(uint32_t std_id, const uint8_t *data, uint8_t dlc);
+static uint8_t App_ProcessVoltageFrame(uint32_t ext_id, const uint8_t *data, uint8_t dlc, uint32_t now);
+static uint8_t App_ProcessTempFrame(uint32_t ext_id, const uint8_t *data, uint8_t dlc, uint32_t now);
+static uint8_t App_ProcessPackSummary(const uint8_t *data, uint8_t dlc, uint32_t now);
+static uint8_t App_ProcessCellVoltageSum(const uint8_t *data, uint8_t dlc, uint32_t now);
+static uint8_t App_ProcessImdDiag(const uint8_t *data, uint8_t dlc, uint32_t now);
+static uint8_t App_ProcessCellExtrema(const uint8_t *data, uint8_t dlc, uint32_t now);
+static uint8_t App_ProcessTempExtrema(const uint8_t *data, uint8_t dlc, uint32_t now);
+static uint8_t App_ProcessStatusFrame(const uint8_t *data, uint8_t dlc, uint32_t now);
+static uint8_t App_ProcessAlarmFrame(const uint8_t *data, uint8_t dlc, uint32_t now);
+static uint8_t App_ProcessChargerFeedback(const uint8_t *data, uint8_t dlc, uint32_t now);
+static uint8_t App_ProcessCan2PowerStatus(const uint8_t *data, uint8_t dlc, uint32_t now);
+static uint8_t App_ProcessCan2DiagStatus(const uint8_t *data, uint8_t dlc, uint32_t now);
 static uint32_t App_BuildBatteryFaultCode(const uint8_t *data);
 static float App_GetHvVoltage(const AppTelemetryState *state, uint32_t now);
 static float App_GetHvCurrent(const AppTelemetryState *state, uint32_t now);
@@ -212,11 +215,11 @@ static uint32_t App_GetBatterySoc(const AppTelemetryState *state, uint32_t now);
 static uint32_t App_GetVcuStatus(const AppTelemetryState *state, uint32_t now);
 static uint32_t App_GetReadyToDrive(const AppTelemetryState *state, uint32_t now);
 static uint32_t App_GetFaultCode(const AppTelemetryState *state, uint32_t now);
-static float App_GetBatteryTempMax(const AppTelemetryState *state, uint32_t now, int32_t max_temp);
+static float App_GetBatteryTempMax(const AppTelemetryState *state, uint32_t now, int32_t max_temp, uint8_t max_temp_valid);
 static void App_GetCellExtrema(const AppTelemetryState *state, uint32_t now,
                                uint32_t *max_mv, uint32_t *min_mv, uint32_t *max_no, uint32_t *min_no);
-static void App_GetTempExtrema(const AppTelemetryState *state, uint32_t now,
-                               int32_t *max_temp, int32_t *min_temp, uint32_t *max_no, uint32_t *min_no);
+static uint8_t App_GetTempExtrema(const AppTelemetryState *state, uint32_t now,
+                                  int32_t *max_temp, int32_t *min_temp, uint32_t *max_no, uint32_t *min_no);
 static uint8_t App_BuildModules(const AppTelemetryState *state, uint32_t now, fsae_TelemetryFrame *frame);
 static HAL_StatusTypeDef App_SendTelemetry(uint32_t now, uint8_t include_modules);
 static HAL_StatusTypeDef App_RS485_Transmit(const uint8_t *data, uint16_t size);
@@ -267,10 +270,12 @@ void App_Init(void)
     Error_Handler();
   }
 
+#if APP_DEBUG_CLI_ENABLE
   if (HAL_UART_Receive_IT(&huart1, (uint8_t *)&g_cli_rx_byte, 1U) != HAL_OK)
   {
     Error_Handler();
   }
+#endif
 }
 
 void App_Run(void)
@@ -306,8 +311,10 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
   CAN_RxHeaderTypeDef header;
   uint8_t data[8];
+  uint8_t frames_processed = 0U;
 
-  while (HAL_CAN_GetRxFifoFillLevel(hcan, CAN_RX_FIFO0) > 0U)
+  while ((HAL_CAN_GetRxFifoFillLevel(hcan, CAN_RX_FIFO0) > 0U) &&
+         (frames_processed < APP_CAN_RX_MAX_FRAMES_PER_IRQ))
   {
     if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &header, data) != HAL_OK)
     {
@@ -315,6 +322,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
     }
 
     App_ProcessCanRx(hcan, &header, data);
+    frames_processed++;
   }
 }
 
@@ -363,19 +371,28 @@ static void App_SetStatusLed(uint8_t on)
 static void App_UpdateStatusLed(uint32_t now)
 {
   uint8_t has_fault = (App_ComputeFaultCode((const AppTelemetryState *)&g_app_state, now) != 0U) ? 1U : 0U;
-  uint8_t link_active = ((g_last_rs485_tx_ms != 0U) &&
-                         ((g_app_state.can1_seen != 0U) || (g_app_state.can2_seen != 0U)) &&
-                         ((uint32_t)(now - g_last_rs485_tx_ms) <= APP_LED_LINK_HOLD_MS)) ? 1U : 0U;
-  uint32_t blink_period = (has_fault != 0U) ? APP_LED_FAST_BLINK_MS : APP_LED_SLOW_BLINK_MS;
+  uint8_t telemetry_active = ((g_last_rs485_tx_ms != 0U) &&
+                              ((g_app_state.can1_seen != 0U) || (g_app_state.can2_seen != 0U))) ? 1U : 0U;
 
-  if (link_active != 0U)
+  if (has_fault != 0U)
+  {
+    if ((uint32_t)(now - g_last_led_toggle_ms) >= APP_LED_FAST_BLINK_MS)
+    {
+      g_last_led_toggle_ms = now;
+      g_led_blink_on = (uint8_t)(g_led_blink_on == 0U);
+      App_SetStatusLed(g_led_blink_on);
+    }
+    return;
+  }
+
+  if (telemetry_active != 0U)
   {
     g_led_blink_on = 1U;
     App_SetStatusLed(1U);
     return;
   }
 
-  if ((uint32_t)(now - g_last_led_toggle_ms) >= blink_period)
+  if ((uint32_t)(now - g_last_led_toggle_ms) >= APP_LED_SLOW_BLINK_MS)
   {
     g_last_led_toggle_ms = now;
     g_led_blink_on = (uint8_t)(g_led_blink_on == 0U);
@@ -385,8 +402,11 @@ static void App_UpdateStatusLed(uint32_t now)
 
 static void App_DebugRecordCanRx(CAN_HandleTypeDef *hcan, const CAN_RxHeaderTypeDef *header, const uint8_t *data)
 {
+#if APP_DEBUG_CLI_ENABLE
+  uint32_t primask = __get_PRIMASK();
   AppCanTraceFrame *slot = (AppCanTraceFrame *)&g_can_trace[g_can_trace_write_index];
 
+  __disable_irq();
   slot->bus_index = (hcan->Instance == CAN1) ? 1U : 2U;
   slot->is_extended_id = (header->IDE == CAN_ID_EXT) ? 1U : 0U;
   slot->dlc = header->DLC;
@@ -398,10 +418,20 @@ static void App_DebugRecordCanRx(CAN_HandleTypeDef *hcan, const CAN_RxHeaderType
   {
     g_can_trace_count++;
   }
+  if (primask == 0U)
+  {
+    __enable_irq();
+  }
+#else
+  (void)hcan;
+  (void)header;
+  (void)data;
+#endif
 }
 
 static void App_DebugPollCli(void)
 {
+#if APP_DEBUG_CLI_ENABLE
   uint8_t ready;
   char command[APP_DEBUG_CLI_BUFFER_SIZE];
 
@@ -420,8 +450,10 @@ static void App_DebugPollCli(void)
   }
 
   App_DebugDumpRecentCan(command);
+#endif
 }
 
+#if APP_DEBUG_CLI_ENABLE
 static void App_DebugDumpRecentCan(const char *command)
 {
   AppCanTraceFrame frames[APP_DEBUG_DUMP_COUNT];
@@ -455,7 +487,7 @@ static void App_DebugDumpRecentCan(const char *command)
   }
 
   {
-    int written = snprintf(line, sizeof(line), "cli[%s]: dumping %u recent CAN frames\r\n", command, count);
+    int written = snprintf(line, sizeof(line), "cli[%s]: dumping %u recent CAN frames\r\n", command, (unsigned int)count);
     if (written > 0)
     {
       (void)HAL_UART_Transmit(&huart1, (uint8_t *)line, (uint16_t)written, APP_DEBUG_UART_TIMEOUT_MS);
@@ -468,18 +500,18 @@ static void App_DebugDumpRecentCan(const char *command)
       line,
       sizeof(line),
       "CAN%u %s 0x%08lX DLC=%u [%02X %02X %02X %02X %02X %02X %02X %02X]\r\n",
-      frames[i].bus_index,
+      (unsigned int)frames[i].bus_index,
       (frames[i].is_extended_id != 0U) ? "EXT" : "STD",
       (unsigned long)frames[i].id,
-      frames[i].dlc,
-      frames[i].data[0],
-      frames[i].data[1],
-      frames[i].data[2],
-      frames[i].data[3],
-      frames[i].data[4],
-      frames[i].data[5],
-      frames[i].data[6],
-      frames[i].data[7]
+      (unsigned int)frames[i].dlc,
+      (unsigned int)frames[i].data[0],
+      (unsigned int)frames[i].data[1],
+      (unsigned int)frames[i].data[2],
+      (unsigned int)frames[i].data[3],
+      (unsigned int)frames[i].data[4],
+      (unsigned int)frames[i].data[5],
+      (unsigned int)frames[i].data[6],
+      (unsigned int)frames[i].data[7]
     );
     if (written > 0)
     {
@@ -487,6 +519,7 @@ static void App_DebugDumpRecentCan(const char *command)
     }
   }
 }
+#endif
 
 static HAL_StatusTypeDef App_CAN_ConfigFilter(CAN_HandleTypeDef *hcan, uint32_t filter_bank)
 {
@@ -524,12 +557,16 @@ static void App_ProcessCan1Rx(const CAN_RxHeaderTypeDef *header, const uint8_t *
 {
   if (header->IDE == CAN_ID_EXT)
   {
-    App_ProcessCan1Ext(header->ExtId, data, header->DLC);
+    if (App_ProcessCan1Ext(header->ExtId, data, header->DLC) != 0U)
+    {
+      g_app_state.can1_seen = 1U;
+    }
     return;
   }
 
   if ((header->IDE == CAN_ID_STD) && (header->StdId == APP_CAN1_HALL_ID) && (header->DLC >= 8U))
   {
+    App_SetProtocol(APP_PROTOCOL_MODERN);
     g_app_state.hall_current_ma = App_ReadBe32Signed(data);
     g_app_state.hall_error = (uint8_t)(data[4] & 0x01U);
     g_app_state.hall_error_code = (uint8_t)((data[4] >> 1) & 0x7FU);
@@ -545,111 +582,102 @@ static void App_ProcessCan2Rx(const CAN_RxHeaderTypeDef *header, const uint8_t *
 {
   if (header->IDE == CAN_ID_EXT)
   {
-    App_ProcessCan2Ext(header->ExtId, data, header->DLC);
+    if (App_ProcessCan2Ext(header->ExtId, data, header->DLC) != 0U)
+    {
+      g_app_state.can2_seen = 1U;
+    }
   }
   else if (header->IDE == CAN_ID_STD)
   {
-    App_ProcessCan2Std(header->StdId, data, header->DLC);
+    if (App_ProcessCan2Std(header->StdId, data, header->DLC) != 0U)
+    {
+      g_app_state.can2_seen = 1U;
+    }
   }
 }
 
-static void App_ProcessCan1Ext(uint32_t ext_id, const uint8_t *data, uint8_t dlc)
+static uint8_t App_ProcessCan1Ext(uint32_t ext_id, const uint8_t *data, uint8_t dlc)
 {
   uint32_t now = HAL_GetTick();
 
   if (((ext_id - APP_CAN1_BASE_VOLTAGE_ID) & 0xFFFFU) == 0U)
   {
-    App_ProcessVoltageFrame(ext_id, data, dlc, now);
-    return;
+    return App_ProcessVoltageFrame(ext_id, data, dlc, now);
   }
 
   if (((ext_id - APP_CAN1_BASE_TEMP_ID) & 0xFFFFU) == 0U)
   {
-    App_ProcessTempFrame(ext_id, data, dlc, now);
-    return;
+    return App_ProcessTempFrame(ext_id, data, dlc, now);
   }
 
   switch (ext_id)
   {
     case APP_CAN1_PACK_SUMMARY_ID:
-      App_ProcessPackSummary(data, dlc, now);
-      g_app_state.can1_seen = 1U;
-      break;
+      return App_ProcessPackSummary(data, dlc, now);
 
     case APP_CAN1_CELL_SUM_ID:
       App_SetProtocol(APP_PROTOCOL_MODERN);
-      App_ProcessCellVoltageSum(data, dlc, now);
-      g_app_state.can1_seen = 1U;
-      break;
+      return App_ProcessCellVoltageSum(data, dlc, now);
 
     case APP_CAN1_IMD_DIAG_ID:
       App_SetProtocol(APP_PROTOCOL_MODERN);
-      App_ProcessImdDiag(data, dlc, now);
-      g_app_state.can1_seen = 1U;
-      break;
+      return App_ProcessImdDiag(data, dlc, now);
 
     case APP_CAN1_CELL_EXTREMA_ID:
-      App_ProcessCellExtrema(data, dlc, now);
-      g_app_state.can1_seen = 1U;
-      break;
+      return App_ProcessCellExtrema(data, dlc, now);
 
     case APP_CAN1_TEMP_EXTREMA_ID:
-      App_ProcessTempExtrema(data, dlc, now);
-      g_app_state.can1_seen = 1U;
-      break;
+      return App_ProcessTempExtrema(data, dlc, now);
 
     case APP_CAN1_STATUS_ID:
-      App_ProcessStatusFrame(data, dlc, now);
-      g_app_state.can1_seen = 1U;
-      break;
+      return App_ProcessStatusFrame(data, dlc, now);
 
     case APP_CAN1_ALARM_ID:
-      App_ProcessAlarmFrame(data, dlc, now);
-      g_app_state.can1_seen = 1U;
-      break;
+      return App_ProcessAlarmFrame(data, dlc, now);
 
     case APP_CAN1_TOOL_FAULT_RESET_ID:
     case APP_CAN1_TOOL_ADC_CAL_ID:
     case APP_CAN1_TOOL_CURRENT_DIR_ID:
     case APP_CAN1_TOOL_RTC_SET_ID:
       App_SetProtocol(APP_PROTOCOL_MODERN);
-      break;
+      return 0U;
 
     default:
       break;
   }
+
+  return 0U;
 }
 
-static void App_ProcessCan2Ext(uint32_t ext_id, const uint8_t *data, uint8_t dlc)
+static uint8_t App_ProcessCan2Ext(uint32_t ext_id, const uint8_t *data, uint8_t dlc)
 {
   if (ext_id == APP_CAN2_CHARGER_FB_ID)
   {
-    App_ProcessChargerFeedback(data, dlc, HAL_GetTick());
-    g_app_state.can2_seen = 1U;
+    return App_ProcessChargerFeedback(data, dlc, HAL_GetTick());
   }
+
+  return 0U;
 }
 
-static void App_ProcessCan2Std(uint32_t std_id, const uint8_t *data, uint8_t dlc)
+static uint8_t App_ProcessCan2Std(uint32_t std_id, const uint8_t *data, uint8_t dlc)
 {
   switch (std_id)
   {
     case APP_CAN2_POWER_STATUS_ID:
-      App_ProcessCan2PowerStatus(data, dlc, HAL_GetTick());
-      g_app_state.can2_seen = 1U;
-      break;
+      return App_ProcessCan2PowerStatus(data, dlc, HAL_GetTick());
 
     case APP_CAN2_DIAG_STATUS_ID:
       App_SetProtocol(APP_PROTOCOL_MODERN);
-      App_ProcessCan2DiagStatus(data, dlc, HAL_GetTick());
-      g_app_state.can2_seen = 1U;
-      break;
+      return App_ProcessCan2DiagStatus(data, dlc, HAL_GetTick());
 
     default:
       break;
   }
+
+  return 0U;
 }
 
-static void App_ProcessVoltageFrame(uint32_t ext_id, const uint8_t *data, uint8_t dlc, uint32_t now)
+static uint8_t App_ProcessVoltageFrame(uint32_t ext_id, const uint8_t *data, uint8_t dlc, uint32_t now)
 {
   uint32_t frame_no = (ext_id - APP_CAN1_BASE_VOLTAGE_ID) >> 16;
   uint32_t module_idx;
@@ -662,7 +690,7 @@ static void App_ProcessVoltageFrame(uint32_t ext_id, const uint8_t *data, uint8_
 
   if ((dlc < 8U) || (frame_no >= 36U))
   {
-    return;
+    return 0U;
   }
 
   module_idx = frame_no / 6U;
@@ -689,10 +717,10 @@ static void App_ProcessVoltageFrame(uint32_t ext_id, const uint8_t *data, uint8_
 
   g_app_state.module_voltage_valid[module_idx] |= (uint8_t)(1U << frame_idx);
   g_app_state.module_voltage_updated_ms[module_idx] = now;
-  g_app_state.can1_seen = 1U;
+  return 1U;
 }
 
-static void App_ProcessTempFrame(uint32_t ext_id, const uint8_t *data, uint8_t dlc, uint32_t now)
+static uint8_t App_ProcessTempFrame(uint32_t ext_id, const uint8_t *data, uint8_t dlc, uint32_t now)
 {
   uint32_t module_idx = (ext_id - APP_CAN1_BASE_TEMP_ID) >> 16;
   uint32_t base_idx;
@@ -702,7 +730,7 @@ static void App_ProcessTempFrame(uint32_t ext_id, const uint8_t *data, uint8_t d
 
   if ((dlc < 8U) || (module_idx >= APP_MODULE_COUNT))
   {
-    return;
+    return 0U;
   }
 
   base_idx = module_idx * APP_TEMPS_PER_MODULE;
@@ -726,14 +754,14 @@ static void App_ProcessTempFrame(uint32_t ext_id, const uint8_t *data, uint8_t d
   }
 
   g_app_state.module_temp_updated_ms[module_idx] = now;
-  g_app_state.can1_seen = 1U;
+  return 1U;
 }
 
-static void App_ProcessPackSummary(const uint8_t *data, uint8_t dlc, uint32_t now)
+static uint8_t App_ProcessPackSummary(const uint8_t *data, uint8_t dlc, uint32_t now)
 {
   if (dlc < 7U)
   {
-    return;
+    return 0U;
   }
 
   g_app_state.pack_voltage_deci_v = App_ReadBe16(&data[0]);
@@ -743,35 +771,38 @@ static void App_ProcessPackSummary(const uint8_t *data, uint8_t dlc, uint32_t no
   g_app_state.battery_state = (uint8_t)((data[6] >> 4) & 0x0FU);
   g_app_state.battery_alarm_level = (uint8_t)(data[6] & 0x0FU);
   g_app_state.pack_summary_updated_ms = now;
+  return 1U;
 }
 
-static void App_ProcessCellVoltageSum(const uint8_t *data, uint8_t dlc, uint32_t now)
+static uint8_t App_ProcessCellVoltageSum(const uint8_t *data, uint8_t dlc, uint32_t now)
 {
   if (dlc < 2U)
   {
-    return;
+    return 0U;
   }
 
   g_app_state.cell_voltage_sum_deci_v = App_ReadBe16(&data[0]);
   g_app_state.cell_voltage_sum_updated_ms = now;
+  return 1U;
 }
 
-static void App_ProcessImdDiag(const uint8_t *data, uint8_t dlc, uint32_t now)
+static uint8_t App_ProcessImdDiag(const uint8_t *data, uint8_t dlc, uint32_t now)
 {
   if (dlc < 8U)
   {
-    return;
+    return 0U;
   }
 
   memcpy((void *)g_app_state.imd_diag_payload, data, 8U);
   g_app_state.imd_diag_updated_ms = now;
+  return 1U;
 }
 
-static void App_ProcessCellExtrema(const uint8_t *data, uint8_t dlc, uint32_t now)
+static uint8_t App_ProcessCellExtrema(const uint8_t *data, uint8_t dlc, uint32_t now)
 {
   if (dlc < 6U)
   {
-    return;
+    return 0U;
   }
 
   g_app_state.max_cell_voltage_mv = App_ReadBe16(&data[0]);
@@ -779,13 +810,14 @@ static void App_ProcessCellExtrema(const uint8_t *data, uint8_t dlc, uint32_t no
   g_app_state.max_cell_index_zero_based = data[4];
   g_app_state.min_cell_index_zero_based = data[5];
   g_app_state.cell_extrema_updated_ms = now;
+  return 1U;
 }
 
-static void App_ProcessTempExtrema(const uint8_t *data, uint8_t dlc, uint32_t now)
+static uint8_t App_ProcessTempExtrema(const uint8_t *data, uint8_t dlc, uint32_t now)
 {
   if (dlc < 5U)
   {
-    return;
+    return 0U;
   }
 
   g_app_state.max_temp_deci_c = (int16_t)(((int16_t)data[0] - 30) * 10);
@@ -794,13 +826,14 @@ static void App_ProcessTempExtrema(const uint8_t *data, uint8_t dlc, uint32_t no
   g_app_state.min_temp_index_zero_based = data[3];
   g_app_state.cooling_control = data[4];
   g_app_state.temp_extrema_updated_ms = now;
+  return 1U;
 }
 
-static void App_ProcessStatusFrame(const uint8_t *data, uint8_t dlc, uint32_t now)
+static uint8_t App_ProcessStatusFrame(const uint8_t *data, uint8_t dlc, uint32_t now)
 {
   if (dlc < 8U)
   {
-    return;
+    return 0U;
   }
 
   g_app_state.pos_relay_state = (uint8_t)((data[0] >> 6) & 0x03U);
@@ -812,13 +845,14 @@ static void App_ProcessStatusFrame(const uint8_t *data, uint8_t dlc, uint32_t no
   g_app_state.charge_request_current_deci_a = App_ReadBe16(&data[4]);
   g_app_state.precharge_voltage_deci_v = App_ReadBe16(&data[6]);
   g_app_state.status_updated_ms = now;
+  return 1U;
 }
 
-static void App_ProcessAlarmFrame(const uint8_t *data, uint8_t dlc, uint32_t now)
+static uint8_t App_ProcessAlarmFrame(const uint8_t *data, uint8_t dlc, uint32_t now)
 {
   if (dlc < 6U)
   {
-    return;
+    return 0U;
   }
 
   g_app_state.alarm_fault_code = App_BuildBatteryFaultCode(data) & ~(APP_HALL_FAULT_BIT | APP_IMD_FAULT_BIT);
@@ -826,26 +860,28 @@ static void App_ProcessAlarmFrame(const uint8_t *data, uint8_t dlc, uint32_t now
                                              (((uint8_t)(data[5] >> 1) & 0x0FU)));
   g_app_state.alarm_updated_ms = now;
   App_UpdateFaultCode();
+  return 1U;
 }
 
-static void App_ProcessChargerFeedback(const uint8_t *data, uint8_t dlc, uint32_t now)
+static uint8_t App_ProcessChargerFeedback(const uint8_t *data, uint8_t dlc, uint32_t now)
 {
   if (dlc < 5U)
   {
-    return;
+    return 0U;
   }
 
   g_app_state.charger_fb_voltage_deci_v = App_ReadBe16(&data[0]);
   g_app_state.charger_fb_current_deci_a = App_ReadBe16(&data[2]);
   g_app_state.charger_fb_state = data[4];
   g_app_state.charger_fb_updated_ms = now;
+  return 1U;
 }
 
-static void App_ProcessCan2PowerStatus(const uint8_t *data, uint8_t dlc, uint32_t now)
+static uint8_t App_ProcessCan2PowerStatus(const uint8_t *data, uint8_t dlc, uint32_t now)
 {
   if (dlc < 8U)
   {
-    return;
+    return 0U;
   }
 
   g_app_state.can2_pack_voltage_deci_v = App_ReadLe16(&data[0]);
@@ -854,13 +890,14 @@ static void App_ProcessCan2PowerStatus(const uint8_t *data, uint8_t dlc, uint32_
   g_app_state.can2_soc = data[6];
   g_app_state.can2_max_temp_deci_c = (int16_t)(((int16_t)data[7] - 30) * 10);
   g_app_state.can2_power_updated_ms = now;
+  return 1U;
 }
 
-static void App_ProcessCan2DiagStatus(const uint8_t *data, uint8_t dlc, uint32_t now)
+static uint8_t App_ProcessCan2DiagStatus(const uint8_t *data, uint8_t dlc, uint32_t now)
 {
   if (dlc < 8U)
   {
-    return;
+    return 0U;
   }
 
   g_app_state.can2_battery_state = (uint8_t)((data[0] >> 4) & 0x0FU);
@@ -871,6 +908,7 @@ static void App_ProcessCan2DiagStatus(const uint8_t *data, uint8_t dlc, uint32_t
   g_app_state.slave_offline_mask = (uint8_t)(data[7] & 0x3FU);
   g_app_state.can2_diag_updated_ms = now;
   App_UpdateFaultCode();
+  return 1U;
 }
 
 static uint32_t App_BuildBatteryFaultCode(const uint8_t *data)
@@ -1042,9 +1080,9 @@ static uint32_t App_GetFaultCode(const AppTelemetryState *state, uint32_t now)
   return App_ComputeFaultCode(state, now);
 }
 
-static float App_GetBatteryTempMax(const AppTelemetryState *state, uint32_t now, int32_t max_temp)
+static float App_GetBatteryTempMax(const AppTelemetryState *state, uint32_t now, int32_t max_temp, uint8_t max_temp_valid)
 {
-  if (max_temp != 0)
+  if (max_temp_valid != 0U)
   {
     return (float)max_temp / 10.0f;
   }
@@ -1108,8 +1146,8 @@ static void App_GetCellExtrema(const AppTelemetryState *state, uint32_t now,
   *min_no = local_min_no;
 }
 
-static void App_GetTempExtrema(const AppTelemetryState *state, uint32_t now,
-                               int32_t *max_temp, int32_t *min_temp, uint32_t *max_no, uint32_t *min_no)
+static uint8_t App_GetTempExtrema(const AppTelemetryState *state, uint32_t now,
+                                  int32_t *max_temp, int32_t *min_temp, uint32_t *max_no, uint32_t *min_no)
 {
   uint32_t module_idx;
   uint32_t temp_idx;
@@ -1125,7 +1163,7 @@ static void App_GetTempExtrema(const AppTelemetryState *state, uint32_t now,
     *min_temp = state->min_temp_deci_c;
     *max_no = (uint32_t)state->max_temp_index_zero_based + 1U;
     *min_no = (uint32_t)state->min_temp_index_zero_based + 1U;
-    return;
+    return 1U;
   }
 
   for (module_idx = 0U; module_idx < APP_MODULE_COUNT; ++module_idx)
@@ -1139,7 +1177,7 @@ static void App_GetTempExtrema(const AppTelemetryState *state, uint32_t now,
       *min_temp = 0;
       *max_no = 0U;
       *min_no = 0U;
-      return;
+      return 0U;
     }
 
     for (temp_idx = 0U; temp_idx < APP_TEMPS_PER_MODULE; ++temp_idx)
@@ -1170,13 +1208,14 @@ static void App_GetTempExtrema(const AppTelemetryState *state, uint32_t now,
     *min_temp = 0;
     *max_no = 0U;
     *min_no = 0U;
-    return;
+    return 0U;
   }
 
   *max_temp = local_max;
   *min_temp = local_min;
   *max_no = local_max_no;
   *min_no = local_min_no;
+  return 1U;
 }
 
 static uint8_t App_BuildModules(const AppTelemetryState *state, uint32_t now, fsae_TelemetryFrame *frame)
@@ -1242,6 +1281,7 @@ static HAL_StatusTypeDef App_SendTelemetry(uint32_t now, uint8_t include_modules
   int32_t min_temp;
   uint32_t max_temp_no;
   uint32_t min_temp_no;
+  uint8_t temp_extrema_valid;
 
   __disable_irq();
   *snapshot = *((const AppTelemetryState *)&g_app_state);
@@ -1259,7 +1299,7 @@ static HAL_StatusTypeDef App_SendTelemetry(uint32_t now, uint8_t include_modules
   frame->battery_fault_code = frame->fault_code;
 
   App_GetCellExtrema(snapshot, now, &max_mv, &min_mv, &max_mv_no, &min_mv_no);
-  App_GetTempExtrema(snapshot, now, &max_temp, &min_temp, &max_temp_no, &min_temp_no);
+  temp_extrema_valid = App_GetTempExtrema(snapshot, now, &max_temp, &min_temp, &max_temp_no, &min_temp_no);
 
   frame->max_cell_voltage = max_mv;
   frame->min_cell_voltage = min_mv;
@@ -1269,7 +1309,7 @@ static HAL_StatusTypeDef App_SendTelemetry(uint32_t now, uint8_t include_modules
   frame->min_temp = min_temp;
   frame->max_temp_no = max_temp_no;
   frame->min_temp_no = min_temp_no;
-  frame->battery_temp_max = App_GetBatteryTempMax(snapshot, now, max_temp);
+  frame->battery_temp_max = App_GetBatteryTempMax(snapshot, now, max_temp, temp_extrema_valid);
 
   if (include_modules != 0U)
   {
@@ -1316,6 +1356,7 @@ static HAL_StatusTypeDef App_RS485_Transmit(const uint8_t *data, uint16_t size)
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
+#if APP_DEBUG_CLI_ENABLE
   if (huart->Instance == USART1)
   {
     uint8_t rx = g_cli_rx_byte;
@@ -1342,4 +1383,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 
     (void)HAL_UART_Receive_IT(&huart1, (uint8_t *)&g_cli_rx_byte, 1U);
   }
+#else
+  (void)huart;
+#endif
 }
