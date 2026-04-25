@@ -16,6 +16,8 @@
 #define APP_TEMPS_PER_MODULE            8U
 #define APP_TOTAL_CELL_COUNT            (APP_MODULE_COUNT * APP_CELLS_PER_MODULE)
 #define APP_TOTAL_TEMP_COUNT            (APP_MODULE_COUNT * APP_TEMPS_PER_MODULE)
+#define APP_CAN1_VOLTAGE_FRAMES_PER_MODULE  6U
+#define APP_MODULE_VOLTAGE_VALID_MASK       ((uint8_t)((1U << APP_CAN1_VOLTAGE_FRAMES_PER_MODULE) - 1U))
 
 #define APP_CAN1_FILTER_BANK            0U
 #define APP_CAN2_FILTER_BANK            14U
@@ -53,11 +55,18 @@
 #define APP_DEBUG_CLI_BUFFER_SIZE       32U
 #define APP_CAN_RX_MAX_FRAMES_PER_IRQ   8U
 
-#define APP_LED_ON_STATE                GPIO_PIN_RESET
-#define APP_LED_OFF_STATE               GPIO_PIN_SET
+/* PC13 drives the heartbeat LED with a high-side switch. */
+#define APP_LED_ON_STATE                GPIO_PIN_SET
+#define APP_LED_OFF_STATE               GPIO_PIN_RESET
 
 #define APP_HALL_FAULT_BIT              (1UL << 18)
 #define APP_IMD_FAULT_BIT               (1UL << 19)
+
+_Static_assert(APP_MODULE_COUNT == (sizeof(((fsae_TelemetryFrame *)0)->modules) / sizeof(((fsae_TelemetryFrame *)0)->modules[0])),
+               "APP_MODULE_COUNT must match fsae_TelemetryFrame.modules capacity");
+_Static_assert(APP_CELLS_PER_MODULE == 23U, "BatteryModule protobuf layout has 23 voltage fields");
+_Static_assert(APP_TEMPS_PER_MODULE == 8U, "BatteryModule protobuf layout has 8 temperature fields");
+_Static_assert(APP_CAN1_VOLTAGE_FRAMES_PER_MODULE < 8U, "module voltage validity mask must fit in uint8_t");
 
 typedef enum
 {
@@ -991,7 +1000,7 @@ static float App_GetHvVoltage(const AppTelemetryState *state, uint32_t now)
   for (i = 0U; i < APP_MODULE_COUNT; ++i)
   {
     if (App_IsFresh(now, state->module_voltage_updated_ms[i]) == 0U ||
-        state->module_voltage_valid[i] != 0x3FU)
+        state->module_voltage_valid[i] != APP_MODULE_VOLTAGE_VALID_MASK)
     {
       return 0.0f;
     }
@@ -1116,7 +1125,7 @@ static void App_GetCellExtrema(const AppTelemetryState *state, uint32_t now,
   for (i = 0U; i < APP_MODULE_COUNT; ++i)
   {
     if (App_IsFresh(now, state->module_voltage_updated_ms[i]) == 0U ||
-        state->module_voltage_valid[i] != 0x3FU)
+        state->module_voltage_valid[i] != APP_MODULE_VOLTAGE_VALID_MASK)
     {
       *max_mv = 0U;
       *min_mv = 0U;
@@ -1235,7 +1244,7 @@ static uint8_t App_BuildModules(const AppTelemetryState *state, uint32_t now, fs
 
     if (App_IsFresh(now, state->module_voltage_updated_ms[module_idx]) == 0U ||
         App_IsFresh(now, state->module_temp_updated_ms[module_idx]) == 0U ||
-        state->module_voltage_valid[module_idx] != 0x3FU ||
+        state->module_voltage_valid[module_idx] != APP_MODULE_VOLTAGE_VALID_MASK ||
         state->module_temp_valid[module_idx] == 0U)
     {
       continue;
