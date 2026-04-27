@@ -6,6 +6,30 @@
 
 确保你已经安装了 Python 以及必要的依赖库。
 
+### 1.1 使用虚拟环境（推荐）
+
+本项目在 `protobuf-master/` 目录下已创建 `.venv` 虚拟环境。激活后安装依赖：
+
+```bash
+cd protobuf-master
+source .venv/bin/activate        # macOS / Linux
+pip install paho-mqtt protobuf pyserial python-can
+```
+
+退出虚拟环境：
+
+```bash
+deactivate
+```
+
+如果不激活虚拟环境，也可以直接用 venv 内的 python 运行：
+
+```bash
+.venv/bin/python local_sim2.py --mode mqtt
+```
+
+### 1.2 全局安装（不推荐）
+
 ```bash
 pip install paho-mqtt protobuf pyserial python-can
 ```
@@ -36,8 +60,8 @@ pip install paho-mqtt protobuf pyserial python-can
 
 ```python
 # ================= 配置区域 =================
-# 阿里云服务器的公网 IP
-SERVER_IP = "123.57.174.98"   # 修改为你实际的服务器 IP
+# 腾讯云服务器的公网 IP，对应 bitfsae.com
+SERVER_IP = "82.157.204.124"   # 旧服务器IP为123.57.174.98
 SERVER_PORT = 1883
 TOPIC_TELEMETRY = "fsae/telemetry"
 ```
@@ -46,11 +70,31 @@ TOPIC_TELEMETRY = "fsae/telemetry"
 
 ## 4. 运行模拟
 
-直接在终端运行：
+### 4.1 在虚拟环境下运行
+
+**终端方式**：先激活虚拟环境，再运行脚本：
 
 ```bash
-python local_sim2.py
-./.venv/bin/python REFERENCE/protobuf-master/local_sim2.py --mode mqtt
+cd protobuf-master
+source .venv/bin/activate
+python local_sim2.py --mode mqtt
+```
+
+**直接调用 venv python**（无需激活）：
+
+```bash
+.venv/bin/python local_sim2.py --mode mqtt
+```
+
+**VSCode 方式**：
+
+1. `Cmd+Shift+P` → `Python: Select Interpreter` → 选择 `protobuf-master/.venv/bin/python`
+2. 直接按 ▶ 运行，或在终端中执行 `python local_sim2.py`
+
+### 4.2 其他运行示例
+
+```bash
+python local_sim2.py --mode mqtt
 ```
 
 如果要测试 USB 转 485 + DTU：
@@ -93,10 +137,12 @@ python local_sim2.py --mode serial --serial-port COM3 --packet-suffix-hex 0D0A
 
 ## 5. 常见问题
 
+*   **依赖装到了全局而非虚拟环境**：运行 `which python` 确认当前 python 指向 `.venv/bin/python`；如果指向系统 python，说明虚拟环境未激活，执行 `source .venv/bin/activate`。
+
 *   **缺少模块错误**：如果提示 `ModuleNotFoundError: No module named 'fsae_telemetry_pb2'`，说明你还没生成 Python 的 Protobuf 库文件。请运行 `protoc --python_out=. fsae_telemetry.proto`（确保你安装了 protoc 编译器）。
 *   **看不到新增字段**：如果脚本还能正常发送，但服务器只收到旧字段，通常是因为本地 `fsae_telemetry_pb2.py` 还是旧版本，需要用最新 `.proto` 重新生成。
 *   **Protobuf 导入时报错**：如果安装完依赖后，在导入 `fsae_telemetry_pb2` 或 `google.protobuf` 时仍报错，并且你的 Python 版本较新（如 3.14），优先升级 `protobuf` 到最新版，而不是固定到旧版。
-*   **连接失败**：检查 `SERVER_IP` 是否正确，以及服务器的 1883 端口是否开放（防火墙/安全组）。
+*   **连接失败**：检查 `SERVER_IP` 是否正确，以及云服务器安全组和防火墙是否放行 TCP `1883` 入站。
 *   **串口打不开**：确认 USB 转 485 的串口号是否正确（设备管理器里查看），并关闭其他占用该串口的软件。
 *   **DTU 收不到完整包**：优先检查 DTU 串口参数是否和脚本一致；如果 DTU 依赖包尾切包，再用 `--packet-suffix-hex` 增加结束符。
 *   **PCAN 打不开**：先确认已安装 PEAK 驱动，且 `python-can` 能识别 `pcan` 接口；通道名通常是 `PCAN_USBBUS1`。

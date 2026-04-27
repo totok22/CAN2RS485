@@ -1,11 +1,11 @@
 # FSAE 遥测系统参考文档
 
-BITFSAE 赛车遥测项目。车载 STM32 读取 CAN 数据，用 **Nanopb**（Protobuf 轻量实现）序列化后经 RS485 送入 DTU，由 DTU 通过 **MQTT** 无线上传至阿里云服务器，Grafana 实时可视化。
+BITFSAE 赛车遥测项目。车载 STM32 读取 CAN 数据，用 **Nanopb**（Protobuf 轻量实现）序列化后经 RS485 送入 DTU，由 DTU 通过 **MQTT** 无线上传至云服务器，Grafana 实时可视化。
 
 ```
-STM32(CAN) --RS485--> DTU --MQTT/4G--> 阿里云
-                                          |
-                               Mosquitto -> Telegraf -> InfluxDB -> Grafana
+STM32(CAN) --RS485--> DTU --MQTT/4G--> 云服务器
+                                           |
+                                Mosquitto -> Telegraf -> InfluxDB -> Grafana
 ```
 
 本目录只保存 Protobuf、DTU、服务器链路参考资料。车端实现以仓库根目录文档和源码为准。
@@ -24,6 +24,8 @@ STM32(CAN) --RS485--> DTU --MQTT/4G--> 阿里云
   - 模拟脚本使用说明
 - `DTU_DEBUG_GUIDE.md`
   - DTU 联调说明
+- `GRAFANA_GUIDE.md`
+  - Grafana 仪表盘、查询、面板和可视化配置说明
 - `PROTO_GUIDE.md`
   - Protobuf 维护约束
 - `STM32_GUIDE.md`
@@ -66,4 +68,4 @@ python local_sim2.py --mode both --serial-port COM3 --baudrate 115200
 python local_sim2.py --mode pcan --pcan-channel PCAN_USBBUS1 --pcan-bitrate 250000
 ```
 
-服务器地址：`123.57.174.98:1883`，Topic：`fsae/telemetry`，Grafana：`https://bitfsae.xin/monitor/`
+服务器地址：`82.157.204.124:1883`，Topic：`fsae/telemetry`，Grafana：`https://bitfsae.com/monitor/`

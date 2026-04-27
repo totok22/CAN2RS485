@@ -17,8 +17,8 @@ except ImportError:
     serial = None
 
 # ================= 配置区域 =================
-# 阿里云服务器的公网 IP
-SERVER_IP = "123.57.174.98" 
+# 腾讯云服务器的公网 IP，对应 bitfsae.com
+SERVER_IP = "82.157.204.124"
 SERVER_PORT = 1883
 TOPIC_TELEMETRY = "fsae/telemetry"
 SERIAL_PORT = "COM3"
