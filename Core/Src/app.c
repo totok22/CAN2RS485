@@ -609,12 +609,16 @@ static uint8_t App_ProcessCan1Ext(uint32_t ext_id, const uint8_t *data, uint8_t 
 {
   uint32_t now = HAL_GetTick();
 
-  if (((ext_id - APP_CAN1_BASE_VOLTAGE_ID) & 0xFFFFU) == 0U)
+  if ((ext_id >= APP_CAN1_BASE_VOLTAGE_ID) &&
+      (ext_id < (APP_CAN1_BASE_VOLTAGE_ID + (36UL << 16))) &&
+      (((ext_id - APP_CAN1_BASE_VOLTAGE_ID) & 0xFFFFU) == 0U))
   {
     return App_ProcessVoltageFrame(ext_id, data, dlc, now);
   }
 
-  if (((ext_id - APP_CAN1_BASE_TEMP_ID) & 0xFFFFU) == 0U)
+  if ((ext_id >= APP_CAN1_BASE_TEMP_ID) &&
+      (ext_id < (APP_CAN1_BASE_TEMP_ID + (APP_MODULE_COUNT << 16))) &&
+      (((ext_id - APP_CAN1_BASE_TEMP_ID) & 0xFFFFU) == 0U))
   {
     return App_ProcessTempFrame(ext_id, data, dlc, now);
   }
